@@ -28,11 +28,7 @@ window.AudioContext = window.AudioContext || window.webkitAudioContext;
 
 // Likewise for requestAnimationFrame.
 window.requestAnimationFrame =
-  window.requestAnimationFrame ||
-  window.webkitRequestAnimationFrame ||
-  window.mozRequestAnimationFrame ||
-  window.msRequestAnimationFrame ||
-  window.oRequestAnimationFrame;
+  window.requestAnimationFrame || window.webkitRequestAnimationFrame;
 
 /**
  * This class represents an obstacle in the game.
@@ -135,7 +131,8 @@ class Obstacle {
  */
 class ObstacleGenerator {
   constructor(canvasHeight) {
-    this.lastGenerated = null;
+    // Dummy obstacle set further away to let new players get used to it.
+    this.lastGenerated = new Obstacle(2 * SPACE_BETWEEN_OBSTACLES, 0, 0);
     this.canvasHeight = canvasHeight;
   }
 
@@ -234,6 +231,35 @@ class Game {
   }
 
   /**
+   * Restarts the game.
+   */
+  restart() {
+    // Reset score to 0.
+    this.score = 0;
+    this.scoreElem.innerText = "Score: " + this.score;
+
+    this.time = 0;
+
+    // Initializes the starting character height.
+    this.charY = window.innerHeight / 2;
+
+    // Initiqalizes the starting state.
+    this.state = GAME_STATES.PLAYING;
+
+    this.obsGen = new ObstacleGenerator(window.innerHeight);
+
+    // Initializes random obstacles.
+    this.obstacles = this.obsGen.generateObstacles(
+      window.innerWidth / SPACE_BETWEEN_OBSTACLES
+    );
+
+    for (const obstacle of this.obstacles) {
+      this.screen.appendChild(obstacle.bottomPillar);
+      this.screen.appendChild(obstacle.topPillar);
+    }
+  }
+
+  /**
    * Increments the score and set the text of the element as appropriate.
    */
   _incScore() {
@@ -280,8 +306,17 @@ class Game {
         this.state = GAME_STATES.STOPPED;
 
         const gameOverModal = document.createElement("div");
-        gameOverModal.className = "game-over";
-        gameOverModal.innerText = `Game over! Score: ${this.score}`;
+        gameOverModal.id = "game-over";
+
+        const gameOverDiv = document.createElement("div");
+        gameOverDiv.innerText = `Game over! Score: ${this.score}`;
+
+        const restartButton = document.createElement("button");
+        restartButton.className = "restart-button";
+        restartButton.innerText = "Restart";
+
+        gameOverModal.appendChild(gameOverDiv);
+        gameOverModal.appendChild(restartButton);
         this.screen.appendChild(gameOverModal);
       }
     }
@@ -311,13 +346,11 @@ class Game {
     // detect pitch.
     const pitchHeight = (boundedPitch / yRangeScale) * window.innerHeight;
 
-    console.log(pitchHeight);
-
     // Let the pitch have a linear force.
     const heightDifference = Number.isNaN(pitchHeight)
       ? 0
       : window.innerHeight - pitchHeight - this.charY;
-    this.charY += 0.05 * heightDifference;
+    this.charY += 0.15 * heightDifference;
 
     // Draw the obstacles and character.
     this._drawObstacles();
@@ -373,6 +406,31 @@ class Application {
 
     this.game = new Game();
     this.audioProcessor = null;
+
+    const restartFn = (event) => {
+      if (
+        !event.target.matches(".restart-button") ||
+        this.game.state !== GAME_STATES.STOPPED
+      )
+        return;
+      event.preventDefault();
+
+      const gameOverModal = document.getElementById("game-over");
+      this.game.screen.removeChild(gameOverModal);
+
+      const obstacles = document.getElementsByClassName("obstacle");
+      const topObstacles = document.getElementsByClassName("top-obstacle");
+
+      for (const obstacle of [...obstacles, ...topObstacles]) {
+        this.game.screen.removeChild(obstacle);
+      }
+
+      this.game.restart();
+
+      window.requestAnimationFrame(this.onPitchUpdate.bind(this));
+    };
+
+    window.addEventListener("click", restartFn, false);
   }
 
   /**
